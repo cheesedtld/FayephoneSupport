@@ -1,7 +1,8 @@
 {
     "display_name": "FayephoneSupport",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "description": "Faye小手机适配器",
     "author": "Faye",
     "js": "index.js"
 }
+
