@@ -1,8 +1,23 @@
-import {
+// 动态导入 utils.js 以适配不同的安装路径 (extensions/fayephone 或 extensions/third-party/fayephone)
+let utils;
+try {
+    // 尝试标准路径 (extensions/fayephone/index.js -> ../../utils.js)
+    utils = await import("../../utils.js");
+} catch (e1) {
+    try {
+        // 尝试深层路径 (extensions/third-party/fayephone/index.js -> ../../../utils.js)
+        utils = await import("../../../utils.js");
+    } catch (e2) {
+        console.error("[FayephoneSupport] Failed to load utils.js from both ../../ and ../../../", e1, e2);
+        throw new Error("FayephoneSupport: 无法加载 utils.js，请检查插件安装路径。");
+    }
+}
+
+const {
     getBase64Async,
     saveBase64AsFile,
     getStringHash
-} from "../../../utils.js";
+} = utils;
 
 /**
  * 核心上传函数 - 修复路径与上下文获取
