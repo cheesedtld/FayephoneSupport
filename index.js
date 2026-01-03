@@ -1,9 +1,23 @@
-import {
+// 动态导入 utils.js 以适配不同的安装路径 (extensions/fayephone 或 extensions/third-party/fayephone)
+let utils;
+try {
+    // 尝试标准路径 (extensions/fayephone/index.js -> ../../utils.js)
+    utils = await import("../../utils.js");
+} catch (e1) {
+    try {
+        // 尝试深层路径 (extensions/third-party/fayephone/index.js -> ../../../utils.js)
+        utils = await import("../../../utils.js");
+    } catch (e2) {
+        console.error("[FayephoneSupport] Failed to load utils.js from both ../../ and ../../../", e1, e2);
+        throw new Error("FayephoneSupport: 无法加载 utils.js，请检查插件安装路径。");
+    }
+}
+
+const {
     getBase64Async,
     saveBase64AsFile,
     getStringHash
-} from "../../utils.js";
-
+} = utils;
 
 /**
  * 核心上传函数 - 修复路径与上下文获取
@@ -146,118 +160,5 @@ function getCharacterInfo() {
 // 挂载到 window 对象供 iframe 调用
 window.__fayePhoneSupport_upload = adapterUpload;
 window.__fayePhoneSupport_getCharInfo = getCharacterInfo;
-
-// --- Worldbook API Support ---
-const WorldbookAPI = {
-    async getLorebook(name) {
-        if (!name) return null;
-        try {
-            const res = await fetch('/api/worldinfo/get', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ name })
-            });
-            if (res.ok) return await res.json();
-        } catch(e) { console.error('[FayePhone] getLorebook failed', e); }
-        return null;
-    },
-    
-    async saveLorebook(name, data) {
-        try {
-            const res = await fetch('/api/worldinfo/edit', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ name, data })
-            });
-            return res.ok;
-        } catch(e) { console.error('[FayePhone] saveLorebook failed', e); return false; }
-    },
-
-    async createLorebook(name) {
-         try {
-            const res = await fetch('/api/worldinfo/create', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ name })
-            });
-            return res.ok;
-        } catch(e) {
-            // Fallback: try to save with empty data which might create it
-            return this.saveLorebook(name, { entries: {} });
-        }
-    },
-
-    getCharLorebooks() {
-        let char = null;
-        if (window.SillyTavern && window.SillyTavern.getContext) {
-            const ctx = window.SillyTavern.getContext();
-            if (ctx.characters && ctx.characterId !== undefined) {
-                char = ctx.characters[ctx.characterId];
-            }
-        }
-        // Fallback to global characters array
-        if (!char && window.characters && window.this_chid !== undefined) {
-            char = window.characters[window.this_chid];
-        }
-        
-        if (char) {
-            return {
-                primary: char.data?.character_book || null,
-                additional: char.data?.extensions?.world_info || []
-            };
-        }
-        return null;
-    },
-
-    async setCurrentCharLorebooks(config) {
-        let charId = undefined;
-        if (window.SillyTavern && window.SillyTavern.getContext) {
-            const ctx = window.SillyTavern.getContext();
-            charId = ctx.characterId;
-        }
-        if (charId === undefined && window.this_chid !== undefined) charId = window.this_chid;
-        
-        if (charId !== undefined && window.characters) {
-            const char = window.characters[charId];
-            if (!char) return false;
-            
-            if (!char.data) char.data = {};
-            if (!char.data.extensions) char.data.extensions = {};
-            
-            if (config.primary !== undefined) char.data.character_book = config.primary;
-            if (config.additional !== undefined) char.data.extensions.world_info = config.additional;
-            
-            try {
-                const res = await fetch('/api/characters/edit', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        avatar: char.avatar,
-                        data: char.data
-                    })
-                });
-                // Try to reload character to apply changes
-                if (window.reloadCurrentCharacter) window.reloadCurrentCharacter();
-                return res.ok;
-            } catch(e) { console.error('[FayePhone] setCurrentCharLorebooks failed', e); return false; }
-        }
-        return false;
-    },
-
-    async executeSlashCommand(command) {
-        if (window.SillyTavern && window.SillyTavern.executeSlashCommands) {
-            await window.SillyTavern.executeSlashCommands(command);
-            return true;
-        }
-        // Fallback for older versions or different context
-        if (window.executeSlashCommands) {
-            await window.executeSlashCommands(command);
-            return true;
-        }
-        return false;
-    }
-};
-
-window.__fayePhoneSupport_API = WorldbookAPI;
 
 console.log("FayephoneSupport Adapter (Path Fixed) Loaded");
