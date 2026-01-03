@@ -166,6 +166,18 @@ const WorldbookAPI = {
     async getLorebook(name) {
         if (!name) return null;
         try {
+            // New ST API Wrapper
+            if (typeof getWorldbook !== 'undefined') {
+                try {
+                    const entries = await getWorldbook(name);
+                    return { entries: entries }; // Map array to { entries: ... } structure for compat
+                } catch (e) {
+                    // getWorldbook throws if not found
+                    return null;
+                }
+            }
+
+            // Fallback to fetch
             const res = await fetch('/api/worldinfo/get', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -178,6 +190,23 @@ const WorldbookAPI = {
     
     async saveLorebook(name, data) {
         try {
+            // New ST API Wrapper
+            if (typeof createOrReplaceWorldbook !== 'undefined') {
+                // The API expects an array of entries.
+                // data might be { entries: {} } or { entries: [] }
+                let entries = [];
+                if (Array.isArray(data)) entries = data;
+                else if (data && data.entries) {
+                    entries = Array.isArray(data.entries) 
+                        ? data.entries 
+                        : Object.values(data.entries);
+                }
+                
+                await createOrReplaceWorldbook(name, entries);
+                return true;
+            }
+
+            // Fallback to fetch
             const res = await fetch('/api/worldinfo/edit', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -189,7 +218,20 @@ const WorldbookAPI = {
 
     async createLorebook(name) {
          try {
-            // First check if it already exists to avoid 403 Forbidden on re-creation
+            // New ST API Wrapper
+            if (typeof createWorldbook !== 'undefined') {
+                // If createWorldbook returns false, it might mean it exists or failed.
+                // But typically we just want to ensure it's there.
+                try {
+                    await createWorldbook(name);
+                    return true;
+                } catch(e) {
+                    // Try to update if create fails (maybe exists)
+                    return true; 
+                }
+            }
+
+            // Fallback to fetch
             const check = await this.getLorebook(name);
             if (check) return true;
 
@@ -200,12 +242,19 @@ const WorldbookAPI = {
             });
             return res.ok;
         } catch(e) { 
-            // Fallback: try to save with empty data which might create it
             return this.saveLorebook(name, { entries: {} });
         }
     },
 
     getCharLorebooks() {
+        // New ST API Wrapper
+        if (typeof getCharWorldbookNames !== 'undefined') {
+            try {
+                return getCharWorldbookNames('current');
+            } catch(e) { console.error('getCharWorldbookNames failed', e); }
+        }
+
+        // Fallback
         let char = null;
         if (window.SillyTavern && window.SillyTavern.getContext) {
             const ctx = window.SillyTavern.getContext();
@@ -213,7 +262,6 @@ const WorldbookAPI = {
                 char = ctx.characters[ctx.characterId];
             }
         }
-        // Fallback to global characters array
         if (!char && window.characters && window.this_chid !== undefined) {
             char = window.characters[window.this_chid];
         }
@@ -228,6 +276,15 @@ const WorldbookAPI = {
     },
 
     async setCurrentCharLorebooks(config) {
+        // New ST API Wrapper
+        if (typeof rebindCharWorldbooks !== 'undefined') {
+            try {
+                await rebindCharWorldbooks('current', config);
+                return true;
+            } catch(e) { console.error('rebindCharWorldbooks failed', e); return false; }
+        }
+
+        // Fallback
         let charId = undefined;
         if (window.SillyTavern && window.SillyTavern.getContext) {
             const ctx = window.SillyTavern.getContext();
@@ -254,7 +311,6 @@ const WorldbookAPI = {
                         data: char.data 
                     })
                 });
-                // Try to reload character to apply changes
                 if (window.reloadCurrentCharacter) window.reloadCurrentCharacter();
                 return res.ok;
             } catch(e) { console.error('[FayePhone] setCurrentCharLorebooks failed', e); return false; }
@@ -267,7 +323,6 @@ const WorldbookAPI = {
             await window.SillyTavern.executeSlashCommands(command);
             return true;
         }
-        // Fallback for older versions or different context
         if (window.executeSlashCommands) {
             await window.executeSlashCommands(command);
             return true;
