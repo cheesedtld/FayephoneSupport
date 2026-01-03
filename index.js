@@ -189,6 +189,10 @@ const WorldbookAPI = {
 
     async createLorebook(name) {
          try {
+            // First check if it already exists to avoid 403 Forbidden on re-creation
+            const check = await this.getLorebook(name);
+            if (check) return true;
+
             const res = await fetch('/api/worldinfo/create', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
